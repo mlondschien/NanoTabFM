@@ -1,0 +1,15 @@
+name: nano-tabfm
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - scikit-learn
+  - pandas
+  - click
+  - black
+  - pip
+  - pip:
+      # PyTorch nightly: torch 2.13 computes wrong gradients on MPS.
+      - --pre
+      - --index-url https://download.pytorch.org/whl/nightly/cpu
+      - torch
