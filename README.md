@@ -6,7 +6,7 @@ tables. Architecture is based on TabICLv2 and NanoTabICL. From `NanoTabFM`:
 ```
 1. Standardize features.
 2. Apply learned Fourier encoding to all entries of X_train and X_test.
-   Apply first label embedding to y_test and add this to the encoded cells.
+   Apply first label embedding to y_train and add this to the encoded cells.
 3. Apply induced self-attention (ISAB) to each column of the encoded feature matrix.
    This first "summarizes" the column's distribution with the inducing tokens, then
    relates each cell to the summarized column information.

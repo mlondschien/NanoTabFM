@@ -28,6 +28,7 @@ def main(steps, batch_size, learning_rate, device, seed, output):
     torch.manual_seed(seed)
     model = NanoTabFM().to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=steps)
     num_parameters = sum(parameter.numel() for parameter in model.parameters())
     print(f"NanoTabFM: {num_parameters:,} parameters, device={device}", flush=True)
 
@@ -47,6 +48,8 @@ def main(steps, batch_size, learning_rate, device, seed, output):
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
+        scheduler.step()
+
         if device == "mps":
             # With varying shapes, cached MPS buffers otherwise outgrow physical memory.
             torch.mps.empty_cache()

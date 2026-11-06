@@ -6,12 +6,13 @@ class FourierFeatureEncoder(nn.Module):
     def __init__(self, embedding_size, num_frequencies=16):
         super().__init__()
         self.frequencies = nn.Parameter(0.1 * torch.randn(num_frequencies))
-        self.projection = nn.Linear(2 * num_frequencies, embedding_size)
+        # Each cell encodes 3 grouped features (see NanoTabFM.forward).
+        self.projection = nn.Linear(3 * 2 * num_frequencies, embedding_size)
 
     def forward(self, features):
         angles = 2 * torch.pi * features.unsqueeze(-1) * self.frequencies
         fourier_features = torch.cat([angles.sin(), angles.cos()], dim=-1)
-        return self.projection(fourier_features)
+        return self.projection(fourier_features.flatten(-2))
 
 
 class AttentionBlock(nn.Module):
@@ -58,8 +59,9 @@ class NanoTabFM(nn.Module):
     """In-context binary classifier for tables with 1 to max_features features.
 
     1. Standardize features.
-    2. Apply learned Fourier encoding to all entries of X_train and X_test.
-       Apply first label embedding to y_test and add this to the encoded cells.
+    2. Apply learned Fourier encoding to all entries of X_train and X_test. The cell of
+       feature j encodes features j, j + 1, and j + 3 (modulo F) together.
+       Apply first label embedding to y_train and add this to the encoded cells.
     3. Apply induced self-attention (ISAB) to each column of the encoded feature matrix.
        This first "summarizes" the column's distribution with the inducing tokens, then
        relates each cell to the summarized column information.
@@ -72,7 +74,7 @@ class NanoTabFM(nn.Module):
 
     For defaults (embedding_size=96, num_heads=4, num_inducing_tokens=16,
     num_context_layers=3, max_features=10, num_frequencies=16), approx. parameter counts
-    are 1. 4k, 2. 151k, 3. 75k, 4. 151k, 5. 75k, 6. 224k, 7. 19k, total 698k.
+    are 1. 10k, 2. 151k, 3. 75k, 4. 151k, 5. 75k, 6. 224k, 7. 19k, total 705k.
     """
 
     def __init__(
@@ -144,7 +146,9 @@ class NanoTabFM(nn.Module):
 
         # Encode X and y and sum. The feature-position embeddings tell row attention which
         # column each cell belongs to.
-        cells = self.feature_encoder(X)  # [B, N, F, E]
+        # Jointly encode feature-groups (j, j+1, j+3) modulo F, as in TabICLv2.
+        groups = torch.stack([X.roll(-offset, dims=2) for offset in (0, 1, 3)], dim=-1)
+        cells = self.feature_encoder(groups)  # [B, N, F, E]
         cells = cells + self.feature_position_embeddings[:num_features]  # [B, N, F, E]
         cell_labels = self.first_label_embedding(y_train).unsqueeze(2)  # [B, C, 1, E]
         cells_train = cells[:, :num_context_rows] + cell_labels  # [B, C, F, E]
